@@ -1,0 +1,81 @@
+{
+  "name": "libreta-meteorologica",
+  "version": "2.0.1",
+  "description": "Libreta meteorológica de estación — ingreso de observaciones, SYNOP y registradores",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64 --publish never",
+    "dist:dir": "electron-builder --win --x64 --dir --publish never",
+    "test": "node test/meteo.mjs"
+  },
+  "keywords": [],
+  "author": "Colaboradores de Libreta Meteorológica",
+  "license": "MIT",
+  "dependencies": {
+    "fflate": "^0.8.3"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "png2icons": "^2.0.1",
+    "resedit": "^2.0.3"
+  },
+  "productName": "Libreta Meteorológica",
+  "build": {
+    "appId": "ar.libreta.meteorologica",
+    "productName": "Libreta Meteorológica",
+    "copyright": "",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "src/**/*",
+      "build/icon.png",
+      "node_modules/fflate/**/*",
+      "package.json"
+    ],
+    "afterPack": "build/afterPack.cjs",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "artifactName": "LibretaMeteorologica-${version}-Windows.${ext}",
+      "executableName": "LibretaMeteorologica"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Libreta Meteorológica",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "LibretaMeteorologica-${version}-Instalador.${ext}",
+      "language": "3082",
+      "installerLanguages": [
+        "es_ES"
+      ],
+      "multiLanguageInstaller": false,
+      "deleteAppDataOnUninstall": false
+    },
+    "asar": false,
+    "publish": null,
+    "electronLanguages": [
+      "es",
+      "es-419",
+      "en-US"
+    ]
+  }
+}

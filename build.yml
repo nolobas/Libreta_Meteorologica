@@ -1,0 +1,120 @@
+# Compila Libreta Meteorológica para Windows en los servidores de GitHub.
+# Cada vez que se publica una etiqueta de versión (por ejemplo v2.0.1) o se ejecuta a mano:
+#   1. arma el programa, 2. lo envía a SignPath para firmarlo (si está configurado),
+#   3. arma el instalador y el .zip y los adjunta a una "Release".
+name: Compilar para Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      FIRMAR: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Pruebas de los cálculos
+        run: npm test
+
+      - name: Armar el programa (sin instalador)
+        run: npx electron-builder --win --x64 --dir --publish never
+
+      # ---------- Firma del programa (LibretaMeteorologica.exe) ----------
+      - name: Subir programa sin firmar
+        if: env.FIRMAR == 'true'
+        id: sin-firmar-app
+        uses: actions/upload-artifact@v4
+        with:
+          name: programa-sin-firmar
+          path: dist/win-unpacked
+
+      - name: Firmar programa con SignPath
+        if: env.FIRMAR == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: programa
+          github-artifact-id: ${{ steps.sin-firmar-app.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist/win-signed
+
+      - name: Reemplazar por la versión firmada
+        if: env.FIRMAR == 'true'
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force dist/win-unpacked
+          Move-Item dist/win-signed dist/win-unpacked
+
+      # ---------- Instalador y .zip ----------
+      - name: Armar instalador
+        run: npx electron-builder --win --x64 --prepackaged dist/win-unpacked --publish never
+
+      - name: Armar .zip (carpeta LibretaMeteorologica)
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json | ConvertFrom-Json).version
+          New-Item -ItemType Directory -Force -Path paquete | Out-Null
+          Copy-Item -Recurse dist/win-unpacked paquete/LibretaMeteorologica
+          Compress-Archive -Path paquete/LibretaMeteorologica -DestinationPath "dist/LibretaMeteorologica-$v-Windows.zip"
+
+      - name: Subir instalador sin firmar
+        if: env.FIRMAR == 'true'
+        id: sin-firmar-inst
+        uses: actions/upload-artifact@v4
+        with:
+          name: instalador-sin-firmar
+          path: dist/*-Instalador.exe
+
+      - name: Firmar instalador con SignPath
+        if: env.FIRMAR == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: instalador
+          github-artifact-id: ${{ steps.sin-firmar-inst.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist/instalador-firmado
+
+      - name: Reunir archivos finales
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path salida | Out-Null
+          Copy-Item dist/*.zip salida/
+          if (Test-Path dist/instalador-firmado) { Copy-Item dist/instalador-firmado/*.exe salida/ } else { Copy-Item dist/*-Instalador.exe salida/ }
+
+      - name: Guardar archivos de la compilación
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibretaMeteorologica-Windows
+          path: salida/*
+
+      - name: Publicar versión (Release)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: salida/*
+          name: Libreta Meteorológica ${{ github.ref_name }}
+          body: |
+            Descargue **LibretaMeteorologica-…-Windows.zip** (no requiere instalación) o el **Instalador**.
+            Free code signing provided by SignPath.io, certificate by SignPath Foundation.
